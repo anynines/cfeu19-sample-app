@@ -1,0 +1,8 @@
+version: "2.1"
+
+services:
+  cfeu19-sample-app:
+    image: anynines/cfeu19-sample-app:1
+    build: .
+    ports:
+      - 3000:3000
