@@ -2,7 +2,7 @@ version: "2.1"
 
 services:
   cfeu19-sample-app:
-    image: anynines/cfeu19-sample-app:1
+    image: anyninesgmbh/cfeu19-sample-app:latest
     build:
       context: .
       dockerfile: Dockerfile
