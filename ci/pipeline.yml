@@ -1,0 +1,454 @@
+---
+resource_types:
+  - name: github-pr
+    type: docker-image
+    source:
+      repository: jtarchie/pr
+      tag: latest
+  - name: slack-notification
+    type: docker-image
+    source:
+      repository: cfcommunity/slack-notification-resource
+      tag: latest
+
+resources:
+  ############################################
+  ### App
+  ############################################
+  - name: app
+    type: git
+    source:
+      uri: git@github.com:anynines/cfeu19-sample-app.git
+      branch: master
+      private_key: ((git_private_key))
+  - name: app-version
+    type: semver
+    source:
+      initial_version: 0.1.0
+      driver: s3
+      bucket: ((app_bucket_name))
+      key: cfeu19-sample-app-version
+      access_key_id: ((app_bucket_aws_access_key))
+      secret_access_key: ((app_bucket_aws_secret_access_key))
+      region_name: ((app_bucket_region_name))
+  - name: app-github-release
+    type: github-release
+    source:
+      owner: anynines
+      repository: cfeu19-sample-app
+      access_token: ((github_access_token))
+  - name: app-pull-request
+    type: github-pr
+    source:
+      repo: anynines/cfeu19-sample-app
+      access_token: ((github_access_token))
+      uri: git@github.com:anynines/cfeu19-sample-app.git
+      base: master
+      private_key: ((git_private_key))
+  - name: gin-gonic-gin
+    type: github-release
+    source:
+      owner: gin-gonic
+      repository: gin
+      # tag_filter: v?([^v]1\..*)
+  - name: app-dependencies
+    type: git
+    source:
+      uri: git@github.com:anynines/cfeu19-sample-app.git
+      branch: update_dependencies
+      private_key: ((git_private_key))
+  # - name: failure-alert
+  #   type: slack-notification
+  #   source:
+  #     url: ((slack_url))
+  ############################################
+
+  ############################################
+  ### BOSH
+  ############################################
+  - name: boshrelease
+    type: git
+    source:
+      uri: git@github.com:anynines/cfeu19-sample-release.git
+      branch: master
+      private_key: ((git_private_key))
+  - name: boshrelease-version
+    type: semver
+    source:
+      initial_version: 0.1.0
+      driver: s3
+      bucket: ((boshrelease_bucket_name))
+      key: cfeu19-sample-release-version
+      access_key_id: ((boshrelease_bucket_aws_access_key))
+      secret_access_key: ((boshrelease_bucket_aws_secret_access_key))
+      region_name: ((boshrelease_bucket_region_name))
+  - name: boshrelease-github-release
+    type: github-release
+    source:
+      owner: anynines
+      repository: cfeu19-sample-release
+      access_token: ((github_access_token))
+  - name: boshrelease-pull-request
+    type: github-pr
+    source:
+      repo: anynines/cfeu19-sample-release
+      access_token: ((github_access_token))
+      uri: git@github.com:anynines/cfeu19-sample-release.git
+      base: master
+      private_key: ((git_private_key))
+  ############################################
+
+  ############################################
+  ### Kubernetes
+  ############################################
+  ############################################
+
+jobs:
+  ############################################
+  ### App
+  ############################################
+  - name: major-app
+    serial_groups:
+      - app-version
+    plan:
+      - get: app-version
+        params:
+          bump: major
+          pre: rc
+      - put: app-version
+        params:
+          file: app-version/version
+  - name: minor-app
+    serial_groups:
+      - app-version
+    plan:
+      - get: app-version
+        params:
+          bump: minor
+          pre: rc
+      - put: app-version
+        params:
+          file: app-version/version
+  - name: patch-app
+    serial_groups:
+      - app-version
+    plan:
+      - get: app-version
+        passed:
+          - ship-app
+        trigger: true
+        params:
+          bump: patch
+          pre: rc
+      - put: app-version
+        params:
+          file: app-version/version
+
+  - name: app-rc
+    serial_groups:
+      - app-version
+    plan:
+      - aggregate:
+        - get: app
+        - get: app-version
+          params:
+            pre: rc
+      - put: app-version
+        params:
+          file: app-version/version
+  - name: app-testflight
+    plan:
+      - aggregate:
+        - get: app
+          passed:
+            - app-rc
+          trigger: true
+        - get: app-version
+          passed:
+            - app-rc
+          trigger: true
+      - task: run-tests
+        file: app/ci/tasks/tests/task.yml
+  - name: ship-app
+    serial_groups:
+      - app-version
+    plan:
+      - aggregate:
+        - get: app
+          passed:
+            - app-testflight
+          trigger: true
+        - get: app-version
+          passed:
+            - app-testflight
+          trigger: true
+          params:
+            bump: final
+      - aggregate:
+        - put: app-version
+          params:
+            file: app-version/version
+        - put: app
+          params:
+            repository: app
+            tag: app-version/version
+            tag_prefix: v
+            only_tag: true
+  - name: app-github-release
+    plan:
+      - aggregate:
+        - get: app
+          passed:
+            - ship-app
+          trigger: true
+        - get: version
+          resource: app-version
+          passed:
+            - ship-app
+          trigger: true
+      - task: build-release-artifacts
+        file: app/ci/tasks/build-release-artifacts/task.yml
+      - put: app-github-release
+        params:
+          name: release-artifacts/name
+          tag: release-artifacts/tag
+          commitish: release-artifacts/commitish
+          body: release-artifacts/notes.md
+
+  - name: update-app-dependencies
+    serial: true
+    plan:
+      - aggregate:
+        - get: app
+        - get: gin-gonic-gin
+      - task: update-dependencies
+        file: app/ci/tasks/update-dependencies/task.yml
+      - put: app-dependencies
+        params:
+          repository: updated-app
+  - name: updated-app-dependencies-testflight
+    serial: true
+    plan:
+      - get: original-app
+        resource: app
+        passed:
+          - update-app-dependencies
+        trigger: true
+      - get: app
+        resource: app-dependencies
+        passed:
+          - update-app-dependencies
+        trigger: true
+      - task: run-tests
+        file: app/ci/tasks/tests/task.yml
+  - name: merge-updated-app-dependencies
+    serial: true
+    plan:
+      - aggregate:
+        - get: app
+          passed:
+            - updated-app-dependencies-testflight
+          trigger: true
+        - get: app-dependencies
+          passed:
+            - updated-app-dependencies-testflight
+          trigger: true
+      - put: app
+        params:
+          repository: app-dependencies
+
+  - name: testflight-app-pr
+    serial: true
+    plan:
+      - get: app
+        resource: app-pull-request
+        version: every
+        trigger: true
+      - put: app-pull-request
+        params:
+          path: app
+          context: tests
+          status: pending
+      - task: run-tests
+        file: app/ci/tasks/tests/task.yml
+        on_success:
+          put: app-pull-request
+          params:
+            path: app
+            context: tests
+            status: success
+        on_failure:
+          put: app-pull-request
+          params:
+            path: app
+            context: unit-tests
+            status: failure
+  ############################################
+
+  ############################################
+  ### BOSH
+  ############################################
+    - name: major-bosh
+    serial_groups:
+      - bosh-version
+    plan:
+      - get: boshrelease-version
+        params:
+          bump: major
+          pre: rc
+      - put: boshrelease-version
+        params:
+          file: boshrelease-version/version
+  - name: minor-bosh
+    serial_groups:
+      - bosh-version
+    plan:
+      - get: boshrelease-version
+        params:
+          bump: minor
+          pre: rc
+      - put: boshrelease-version
+        params:
+          file: boshrelease-version/version
+  - name: patch-bosh
+    serial_groups:
+      - bosh-version
+    plan:
+      - get: boshrelease-version
+        passed:
+          - ship-bosh
+        trigger: true
+        params:
+          bump: patch
+          pre: rc
+      - put: boshrelease-version
+        params:
+          file: boshrelease-version/version
+
+  - name: bosh-rc
+    serial_groups:
+      - bosh-version
+    plan:
+      - aggregate:
+        - get: boshrelease
+        - get: boshrelease-version
+          params:
+            pre: rc
+      - put: boshrelease-version
+        params:
+          file: boshrelease-version/version
+  - name: bosh-testflight
+    plan:
+      - aggregate:
+        - get: boshrelease
+          passed:
+            - bosh-rc
+          trigger: true
+        - get: boshrelease-version
+          passed:
+            - bosh-rc
+          trigger: true
+      - task: run-tests
+        file: boshrelease/ci/tasks/tests/task.yml
+        params:
+          BOSH_ENVIRONMENT: ((bosh_target))
+          BOSH_CA_CERT: ((bosh_ca_cert))
+          BOSH_CLIENT: ((bosh_username))
+          BOSH_CLIENT_SECRET: ((bosh_password))
+  - name: ship-bosh
+    serial_groups:
+      - bosh-version
+    plan:
+      - aggregate:
+        - get: boshrelease
+          passed:
+            - bosh-testflight
+          trigger: true
+        - get: boshrelease-version
+          passed:
+            - bosh-testflight
+          trigger: true
+          params:
+            bump: final
+      - task: build-final-release
+        file: boshrelease/ci/tasks/build-final-release/task.yml
+        params:
+          BOSHRELEASE_PRIVATE_CONFIG: ((boshrelease_private_config))
+      - aggregate:
+        - put: boshrelease-version
+          params:
+            file: boshrelease-version/version
+        - put: boshrelease
+          params:
+            repository: final-boshrelease-repository
+            tag: boshrelease-version/version
+            tag_prefix: v
+        - put: boshrelease-final-release
+          params:
+            file: final-boshrelease-artifacts/cfeu19-sample-*.tgz
+            acl: public-read
+        - put: boshrelease-final-release-sha256
+          params:
+            file: final-boshrelease-artifacts/cfeu19-sample-*.tgz.sha256
+            acl: public-read
+  - name: boshrelease-github-release
+    plan:
+      - aggregate:
+        - get: boshrelease
+          passed:
+            - ship-bosh
+          trigger: true
+        - get: boshrelease-version
+          resource: boshrelease-version
+          passed:
+            - ship-bosh
+          trigger: true
+      - task: build-release-artifacts
+        file: boshrelease/ci/tasks/build-release-artifacts/task.yml
+      - put: boshrelease-github-release
+        params:
+          name: release-artifacts/name
+          tag: release-artifacts/tag
+          commitish: release-artifacts/commitish
+          body: release-artifacts/notes.md
+  ############################################
+
+  ############################################
+  ### Kubernetes
+  ############################################
+  ############################################
+
+groups:
+  - name: App
+    jobs:
+      - major-app
+      - minor-app
+      - patch-app
+      - app-rc
+      - app-testflight
+      - ship-app
+      - app-github-release
+      - update-app-dependencies
+      - updated-app-dependencies-testflight
+      - merge-updated-app-dependencies
+      - testflight-app-pr
+  # - name: BOSH
+  #   jobs:
+  #     - major-bosh
+  #     - minor-bosh
+  #     - patch-bosh
+  #     - bosh-rc
+  #     - bosh-testflight
+  #     - ship-bosh
+  #     - boshrelease-github-release
+  #     - testflight-bosh-pr
+  # - name: Kubernetes
+  #   jobs:
+  #     - major-k8s
+  #     - minor-k8s
+  #     - patch-k8s
+  #     - k8s-rc
+  #     - k8s-testflight
+  #     - ship-k8s
+  #     - k8s-github-release
+  #     - testflight-k8s-pr
