@@ -88,6 +88,22 @@ resources:
       owner: anynines
       repository: cfeu19-sample-release
       access_token: ((github_access_token))
+  - name: boshrelease-final-release
+    type: s3
+    source:
+      bucket: ((boshrelease_bucket_name))
+      regexp: cfeu19-sample-(.*)\.tgz
+      access_key_id: ((boshrelease_bucket_aws_access_key))
+      secret_access_key: ((boshrelease_bucket_aws_secret_access_key))
+      region_name: ((boshrelease_bucket_region_name))
+  - name: boshrelease-final-release-sha256
+    type: s3
+    source:
+      bucket: ((boshrelease_bucket_name))
+      regexp: cfeu19-sample-(.*)\.tgz\.sha256
+      access_key_id: ((boshrelease_bucket_aws_access_key))
+      secret_access_key: ((boshrelease_bucket_aws_secret_access_key))
+      region_name: ((boshrelease_bucket_region_name))
   - name: boshrelease-pull-request
     type: github-pr
     source:
@@ -288,7 +304,7 @@ jobs:
   ############################################
   ### BOSH
   ############################################
-    - name: major-bosh
+  - name: major-bosh
     serial_groups:
       - bosh-version
     plan:
@@ -364,7 +380,8 @@ jobs:
           passed:
             - bosh-testflight
           trigger: true
-        - get: boshrelease-version
+        - get: version
+          resource: boshrelease-version
           passed:
             - bosh-testflight
           trigger: true
@@ -377,11 +394,11 @@ jobs:
       - aggregate:
         - put: boshrelease-version
           params:
-            file: boshrelease-version/version
+            file: version/version
         - put: boshrelease
           params:
             repository: final-boshrelease-repository
-            tag: boshrelease-version/version
+            tag: version/version
             tag_prefix: v
         - put: boshrelease-final-release
           params:
@@ -391,15 +408,23 @@ jobs:
           params:
             file: final-boshrelease-artifacts/cfeu19-sample-*.tgz.sha256
             acl: public-read
-  - name: boshrelease-github-release
+  - name: bosh-github-release
     plan:
       - aggregate:
         - get: boshrelease
           passed:
             - ship-bosh
           trigger: true
-        - get: boshrelease-version
+        - get: version
           resource: boshrelease-version
+          passed:
+            - ship-bosh
+          trigger: true
+        - get: boshrelease-final-release
+          passed:
+            - ship-bosh
+          trigger: true
+        - get: boshrelease-final-release-sha256
           passed:
             - ship-bosh
           trigger: true
@@ -411,6 +436,36 @@ jobs:
           tag: release-artifacts/tag
           commitish: release-artifacts/commitish
           body: release-artifacts/notes.md
+          globs:
+            - boshrelease-final-release/*.tgz
+            - boshrelease-final-release-sha256/*.tgz.sha256
+
+  - name: testflight-bosh-pr
+    serial: true
+    plan:
+      - get: boshrelease
+        resource: boshrelease-pull-request
+        version: every
+        trigger: true
+      - put: boshrelease-pull-request
+        params:
+          path: app
+          context: tests
+          status: pending
+      - task: run-tests
+        file: app/ci/tasks/tests/task.yml
+        on_success:
+          put: boshrelease-pull-request
+          params:
+            path: app
+            context: tests
+            status: success
+        on_failure:
+          put: boshrelease-pull-request
+          params:
+            path: app
+            context: unit-tests
+            status: failure
   ############################################
 
   ############################################
@@ -432,16 +487,16 @@ groups:
       - updated-app-dependencies-testflight
       - merge-updated-app-dependencies
       - testflight-app-pr
-  # - name: BOSH
-  #   jobs:
-  #     - major-bosh
-  #     - minor-bosh
-  #     - patch-bosh
-  #     - bosh-rc
-  #     - bosh-testflight
-  #     - ship-bosh
-  #     - boshrelease-github-release
-  #     - testflight-bosh-pr
+  - name: BOSH
+    jobs:
+      - major-bosh
+      - minor-bosh
+      - patch-bosh
+      - bosh-rc
+      - bosh-testflight
+      - ship-bosh
+      - bosh-github-release
+      - testflight-bosh-pr
   # - name: Kubernetes
   #   jobs:
   #     - major-k8s
