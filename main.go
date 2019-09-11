@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -12,8 +14,9 @@ func main() {
 
 func setupRouter() *gin.Engine {
 	r := gin.Default()
+	r.LoadHTMLGlob("templates/*")
 	r.GET("/", func(c *gin.Context) {
-		c.String(200, "Hello World!")
+		c.HTML(http.StatusOK, "index.html", nil)
 	})
 
 	return r
