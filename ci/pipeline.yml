@@ -1,0 +1,792 @@
+---
+resource_types:
+  - name: github-pr
+    type: docker-image
+    source:
+      repository: jtarchie/pr
+      tag: latest
+  - name: slack-notification
+    type: docker-image
+    source:
+      repository: cfcommunity/slack-notification-resource
+      tag: latest
+
+resources:
+  ############################################
+  ### App
+  ############################################
+  - name: app
+    type: git
+    source:
+      uri: git@github.com:anynines/cfeu19-sample-app.git
+      branch: master
+      private_key: ((git_private_key))
+  - name: app-version
+    type: semver
+    source:
+      initial_version: 0.1.0
+      driver: s3
+      bucket: ((app_bucket_name))
+      key: cfeu19-sample-app-version
+      access_key_id: ((app_bucket_aws_access_key))
+      secret_access_key: ((app_bucket_aws_secret_access_key))
+      region_name: ((app_bucket_region_name))
+  - name: app-docker-image
+    type: docker-image
+    source:
+      repository: anyninesgmbh/cfeu19-sample-app
+      username: ((dockerhub_username))
+      password: ((dockerhub_password))
+  - name: app-github-release
+    type: github-release
+    source:
+      owner: anynines
+      repository: cfeu19-sample-app
+      access_token: ((github_token))
+  - name: gin-gonic-gin
+    type: github-release
+    source:
+      owner: gin-gonic
+      repository: gin
+      # tag_filter: v?([^v]1\..*)
+  - name: app-dependencies
+    type: git
+    source:
+      uri: git@github.com:anynines/cfeu19-sample-app.git
+      branch: update_dependencies
+      private_key: ((git_private_key))
+  - name: app-pull-request
+    type: github-pr
+    source:
+      repo: anynines/cfeu19-sample-app
+      access_token: ((github_token))
+      uri: git@github.com:anynines/cfeu19-sample-app.git
+      base: master
+      private_key: ((git_private_key))
+  # - name: failure-alert
+  #   type: slack-notification
+  #   source:
+  #     url: ((slack_url))
+  ############################################
+
+  ############################################
+  ### BOSH
+  ############################################
+  - name: boshrelease
+    type: git
+    source:
+      uri: git@github.com:anynines/cfeu19-sample-release.git
+      branch: master
+      private_key: ((git_private_key))
+  - name: boshrelease-version
+    type: semver
+    source:
+      initial_version: 0.1.0
+      driver: s3
+      bucket: ((boshrelease_bucket_name))
+      key: cfeu19-sample-release-version
+      access_key_id: ((boshrelease_bucket_aws_access_key))
+      secret_access_key: ((boshrelease_bucket_aws_secret_access_key))
+      region_name: ((boshrelease_bucket_region_name))
+  - name: boshrelease-github-release
+    type: github-release
+    source:
+      owner: anynines
+      repository: cfeu19-sample-release
+      access_token: ((github_token))
+  - name: boshrelease-final-release
+    type: s3
+    source:
+      bucket: ((boshrelease_bucket_name))
+      regexp: cfeu19-sample-(.*)\.tgz
+      access_key_id: ((boshrelease_bucket_aws_access_key))
+      secret_access_key: ((boshrelease_bucket_aws_secret_access_key))
+      region_name: ((boshrelease_bucket_region_name))
+  - name: boshrelease-final-release-sha256
+    type: s3
+    source:
+      bucket: ((boshrelease_bucket_name))
+      regexp: cfeu19-sample-(.*)\.tgz\.sha256
+      access_key_id: ((boshrelease_bucket_aws_access_key))
+      secret_access_key: ((boshrelease_bucket_aws_secret_access_key))
+      region_name: ((boshrelease_bucket_region_name))
+  - name: boshrelease-app
+    type: git
+    source:
+      uri: git@github.com:anynines/cfeu19-sample-release.git
+      branch: update_app
+      private_key: ((git_private_key))
+  - name: boshrelease-pull-request
+    type: github-pr
+    source:
+      repo: anynines/cfeu19-sample-release
+      access_token: ((github_token))
+      uri: git@github.com:anynines/cfeu19-sample-release.git
+      base: master
+      private_key: ((git_private_key))
+  ############################################
+
+  ############################################
+  ### Kubernetes
+  ############################################
+  - name: chart
+    type: git
+    source:
+      uri: git@github.com:anynines/cfeu19-sample-chart.git
+      branch: master
+      private_key: ((git_private_key))
+  - name: chart-version
+    type: semver
+    source:
+      initial_version: 0.1.0
+      driver: s3
+      bucket: ((chart_bucket_name))
+      key: cfeu19-sample-chart-version
+      access_key_id: ((chart_bucket_aws_access_key))
+      secret_access_key: ((chart_bucket_aws_secret_access_key))
+      region_name: ((chart_bucket_region_name))
+  - name: chart-github-release
+    type: github-release
+    source:
+      owner: anynines
+      repository: cfeu19-sample-chart
+      access_token: ((github_token))
+  - name: chart-final-release
+    type: s3
+    source:
+      bucket: ((chart_bucket_name))
+      regexp: cfeu19-sample-chart-(.*)\.tgz
+      access_key_id: ((chart_bucket_aws_access_key))
+      secret_access_key: ((chart_bucket_aws_secret_access_key))
+      region_name: ((chart_bucket_region_name))
+  - name: chart-final-release-sha256
+    type: s3
+    source:
+      bucket: ((chart_bucket_name))
+      regexp: cfeu19-sample-chart-(.*)\.tgz\.sha256
+      access_key_id: ((chart_bucket_aws_access_key))
+      secret_access_key: ((chart_bucket_aws_secret_access_key))
+      region_name: ((chart_bucket_region_name))
+  - name: chart-app
+    type: git
+    source:
+      uri: git@github.com:anynines/cfeu19-sample-chart.git
+      branch: update_app
+      private_key: ((git_private_key))
+  - name: chart-pull-request
+    type: github-pr
+    source:
+      repo: anynines/cfeu19-sample-chart
+      access_token: ((github_token))
+      uri: git@github.com:anynines/cfeu19-sample-chart.git
+      base: master
+      private_key: ((git_private_key))
+  ############################################
+
+jobs:
+  ############################################
+  ### App
+  ############################################
+  - name: major-app
+    serial_groups:
+      - app-version
+    plan:
+      - get: app-version
+        params:
+          bump: major
+          pre: rc
+      - put: app-version
+        params:
+          file: app-version/version
+  - name: minor-app
+    serial_groups:
+      - app-version
+    plan:
+      - get: app-version
+        params:
+          bump: minor
+          pre: rc
+      - put: app-version
+        params:
+          file: app-version/version
+  - name: patch-app
+    serial_groups:
+      - app-version
+    plan:
+      - get: app-version
+        passed:
+          - ship-app
+        trigger: true
+        params:
+          bump: patch
+          pre: rc
+      - put: app-version
+        params:
+          file: app-version/version
+
+  - name: app-rc
+    serial_groups:
+      - app-version
+    plan:
+      - aggregate:
+        - get: app
+        - get: app-version
+          params:
+            pre: rc
+      - put: app-version
+        params:
+          file: app-version/version
+  - name: app-testflight
+    plan:
+      - aggregate:
+        - get: app
+          passed:
+            - app-rc
+          trigger: true
+        - get: app-version
+          passed:
+            - app-rc
+          trigger: true
+      - task: run-tests
+        file: app/ci/tasks/tests/task.yml
+  - name: ship-app
+    serial_groups:
+      - app-version
+    plan:
+      - aggregate:
+        - get: app
+          passed:
+            - app-testflight
+          trigger: true
+        - get: version
+          resource: app-version
+          passed:
+            - app-testflight
+          trigger: true
+          params:
+            bump: final
+      - aggregate:
+        - put: app-version
+          params:
+            file: version/version
+        - put: app
+          params:
+            repository: app
+            tag: version/version
+            tag_prefix: v
+            only_tag: true
+        - put: app-docker-image
+          params:
+            build: app
+            tag_file: version/version
+          attempts: 3
+  - name: app-github-release
+    plan:
+      - aggregate:
+        - get: app
+          passed:
+            - ship-app
+          trigger: true
+        - get: version
+          resource: app-version
+          passed:
+            - ship-app
+          trigger: true
+      - task: build-release-artifacts
+        file: app/ci/tasks/build-release-artifacts/task.yml
+      - put: app-github-release
+        params:
+          name: release-artifacts/name
+          tag: release-artifacts/tag
+          commitish: release-artifacts/commitish
+          body: release-artifacts/notes.md
+
+  - name: update-app-dependencies
+    serial: true
+    plan:
+      - aggregate:
+        - get: app
+        - get: gin-gonic-gin
+      - task: update-dependencies
+        file: app/ci/tasks/update-dependencies/task.yml
+      - put: app-dependencies
+        params:
+          repository: updated-app
+  - name: updated-app-dependencies-testflight
+    serial: true
+    plan:
+      - get: original-app
+        resource: app
+        passed:
+          - update-app-dependencies
+        trigger: true
+      - get: app
+        resource: app-dependencies
+        passed:
+          - update-app-dependencies
+        trigger: true
+      - task: run-tests
+        file: app/ci/tasks/tests/task.yml
+  - name: merge-updated-app-dependencies
+    serial: true
+    plan:
+      - aggregate:
+        - get: app
+          passed:
+            - updated-app-dependencies-testflight
+          trigger: true
+        - get: app-dependencies
+          passed:
+            - updated-app-dependencies-testflight
+          trigger: true
+      - put: app
+        params:
+          repository: app-dependencies
+
+  - name: testflight-app-pr
+    serial: true
+    plan:
+      - get: app
+        resource: app-pull-request
+        version: every
+        trigger: true
+      - put: app-pull-request
+        params:
+          path: app
+          context: tests
+          status: pending
+      - task: run-tests
+        file: app/ci/tasks/tests/task.yml
+        on_success:
+          put: app-pull-request
+          params:
+            path: app
+            context: tests
+            status: success
+        on_failure:
+          put: app-pull-request
+          params:
+            path: app
+            context: unit-tests
+            status: failure
+  ############################################
+
+  ############################################
+  ### BOSH
+  ############################################
+  - name: major-bosh
+    serial_groups:
+      - bosh-version
+    plan:
+      - get: boshrelease-version
+        params:
+          bump: major
+          pre: rc
+      - put: boshrelease-version
+        params:
+          file: boshrelease-version/version
+  - name: minor-bosh
+    serial_groups:
+      - bosh-version
+    plan:
+      - get: boshrelease-version
+        params:
+          bump: minor
+          pre: rc
+      - put: boshrelease-version
+        params:
+          file: boshrelease-version/version
+  - name: patch-bosh
+    serial_groups:
+      - bosh-version
+    plan:
+      - get: boshrelease-version
+        passed:
+          - ship-bosh
+        trigger: true
+        params:
+          bump: patch
+          pre: rc
+      - put: boshrelease-version
+        params:
+          file: boshrelease-version/version
+
+  - name: bosh-rc
+    serial_groups:
+      - bosh-version
+    plan:
+      - aggregate:
+        - get: boshrelease
+        - get: boshrelease-version
+          params:
+            pre: rc
+      - put: boshrelease-version
+        params:
+          file: boshrelease-version/version
+  - name: bosh-testflight
+    plan:
+      - aggregate:
+        - get: boshrelease
+          passed:
+            - bosh-rc
+          trigger: true
+        - get: boshrelease-version
+          passed:
+            - bosh-rc
+          trigger: true
+      - task: run-tests
+        file: boshrelease/ci/tasks/tests/task.yml
+        params:
+          BOSH_ENVIRONMENT: ((bosh_target))
+          BOSH_CA_CERT: ((bosh_ca_cert))
+          BOSH_CLIENT: ((bosh_username))
+          BOSH_CLIENT_SECRET: ((bosh_password))
+  - name: ship-bosh
+    serial_groups:
+      - bosh-version
+    plan:
+      - aggregate:
+        - get: boshrelease
+          passed:
+            - bosh-testflight
+          trigger: true
+        - get: version
+          resource: boshrelease-version
+          passed:
+            - bosh-testflight
+          trigger: true
+          params:
+            bump: final
+      - task: build-final-release
+        file: boshrelease/ci/tasks/build-final-release/task.yml
+        params:
+          BOSHRELEASE_PRIVATE_CONFIG: ((boshrelease_private_config))
+      - aggregate:
+        - put: boshrelease-version
+          params:
+            file: version/version
+        - put: boshrelease
+          params:
+            repository: final-boshrelease-repository
+            tag: version/version
+            tag_prefix: v
+        - put: boshrelease-final-release
+          params:
+            file: final-boshrelease-artifacts/cfeu19-sample-*.tgz
+            acl: public-read
+        - put: boshrelease-final-release-sha256
+          params:
+            file: final-boshrelease-artifacts/cfeu19-sample-*.tgz.sha256
+            acl: public-read
+  - name: bosh-github-release
+    plan:
+      - aggregate:
+        - get: boshrelease
+          passed:
+            - ship-bosh
+          trigger: true
+        - get: version
+          resource: boshrelease-version
+          passed:
+            - ship-bosh
+          trigger: true
+        - get: boshrelease-final-release
+          passed:
+            - ship-bosh
+          trigger: true
+        - get: boshrelease-final-release-sha256
+          passed:
+            - ship-bosh
+          trigger: true
+      - task: build-release-artifacts
+        file: boshrelease/ci/tasks/build-release-artifacts/task.yml
+      - put: boshrelease-github-release
+        params:
+          name: release-artifacts/name
+          tag: release-artifacts/tag
+          commitish: release-artifacts/commitish
+          body: release-artifacts/notes.md
+          globs:
+            - boshrelease-final-release/*.tgz
+            - boshrelease-final-release-sha256/*.tgz.sha256
+
+  - name: update-bosh-app
+    serial: true
+    plan:
+      - aggregate:
+        - get: ci-utils
+          resource: app
+        - get: boshrelease
+        - get: app-release
+          resource: app-github-release
+          trigger: true
+      - task: update-app
+        file: boshrelease/ci/tasks/update-app/task.yml
+      - put: boshrelease-app
+        params:
+          repository: updated-app
+          # Force push so that we always have the latest
+          # "master" + the new app as content of the branch
+          force: true
+      - task: create-pr
+        file: ci-utils/ci/shared/tasks/create-pr/task.yml
+        input_mapping:
+          repository: updated-app
+        params:
+          GITHUB_USER: ((github_user))
+          GITHUB_TOKEN: ((github_token))
+          PR_HEAD_BRANCH: update_app
+          PR_BASE_BRANCH: master
+
+  - name: testflight-bosh-pr
+    serial: true
+    plan:
+      - get: boshrelease
+        resource: boshrelease-pull-request
+        version: every
+        trigger: true
+      - put: boshrelease-pull-request
+        params:
+          path: boshrelease
+          context: tests
+          status: pending
+      - task: run-tests
+        file: boshrelease/ci/tasks/tests/task.yml
+        on_success:
+          put: boshrelease-pull-request
+          params:
+            path: boshrelease
+            context: tests
+            status: success
+        on_failure:
+          put: boshrelease-pull-request
+          params:
+            path: boshrelease
+            context: unit-tests
+            status: failure
+  ############################################
+
+  ############################################
+  ### Kubernetes
+  ############################################
+  - name: major-chart
+    serial_groups:
+      - chart-version
+    plan:
+      - get: chart-version
+        params:
+          bump: major
+          pre: rc
+      - put: chart-version
+        params:
+          file: chart-version/version
+  - name: minor-chart
+    serial_groups:
+      - chart-version
+    plan:
+      - get: chart-version
+        params:
+          bump: minor
+          pre: rc
+      - put: chart-version
+        params:
+          file: chart-version/version
+  - name: patch-chart
+    serial_groups:
+      - chart-version
+    plan:
+      - get: chart-version
+        passed:
+          - ship-chart
+        trigger: true
+        params:
+          bump: patch
+          pre: rc
+      - put: chart-version
+        params:
+          file: chart-version/version
+
+  - name: chart-rc
+    serial_groups:
+      - chart-version
+    plan:
+      - aggregate:
+        - get: chart
+        - get: chart-version
+          params:
+            pre: rc
+      - put: chart-version
+        params:
+          file: chart-version/version
+  - name: chart-testflight
+    plan:
+      - aggregate:
+        - get: chart
+          passed:
+            - chart-rc
+          trigger: true
+        - get: chart-version
+          passed:
+            - chart-rc
+          trigger: true
+      - task: run-tests
+        file: chart/ci/tasks/tests/task.yml
+  - name: ship-chart
+    serial_groups:
+      - chart-version
+    plan:
+      - aggregate:
+        - get: chart
+          passed:
+            - chart-testflight
+          trigger: true
+        - get: version
+          resource: chart-version
+          passed:
+            - chart-testflight
+          trigger: true
+          params:
+            bump: final
+      - task: build-final-release
+        file: chart/ci/tasks/build-final-release/task.yml
+      - aggregate:
+        - put: chart-version
+          params:
+            file: version/version
+        - put: chart
+          params:
+            repository: chart
+            tag: version/version
+            tag_prefix: v
+        - put: chart-final-release
+          params:
+            file: final-chart-artifacts/cfeu19-sample-chart-*.tgz
+            acl: public-read
+        - put: chart-final-release-sha256
+          params:
+            file: final-chart-artifacts/cfeu19-sample-chart-*.tgz.sha256
+            acl: public-read
+  - name: chart-github-release
+    plan:
+      - aggregate:
+        - get: chart
+          passed:
+            - ship-chart
+          trigger: true
+        - get: version
+          resource: chart-version
+          passed:
+            - ship-chart
+          trigger: true
+        - get: chart-final-release
+          passed:
+            - ship-chart
+          trigger: true
+        - get: chart-final-release-sha256
+          passed:
+            - ship-chart
+          trigger: true
+      - task: build-release-artifacts
+        file: chart/ci/tasks/build-release-artifacts/task.yml
+      - put: chart-github-release
+        params:
+          name: release-artifacts/name
+          tag: release-artifacts/tag
+          commitish: release-artifacts/commitish
+          body: release-artifacts/notes.md
+          globs:
+            - chart-final-release/*.tgz
+            - chart-final-release-sha256/*.tgz.sha256
+
+  - name: update-chart-app
+    serial: true
+    plan:
+      - aggregate:
+        - get: ci-utils
+          resource: app
+        - get: chart
+        - get: app-release
+          resource: app-github-release
+          trigger: true
+      - task: update-app
+        file: chart/ci/tasks/update-app/task.yml
+      - put: chart-app
+        params:
+          repository: updated-app
+          # Force push so that we always have the latest
+          # "master" + the new app as content of the branch
+          force: true
+      - task: create-pr
+        file: ci-utils/ci/shared/tasks/create-pr/task.yml
+        input_mapping:
+          repository: updated-app
+        params:
+          GITHUB_USER: ((github_user))
+          GITHUB_TOKEN: ((github_token))
+          PR_HEAD_BRANCH: update_app
+          PR_BASE_BRANCH: master
+
+  - name: testflight-chart-pr
+    serial: true
+    plan:
+      - get: chart
+        resource: chart-pull-request
+        version: every
+        trigger: true
+      - put: chart-pull-request
+        params:
+          path: chart
+          context: tests
+          status: pending
+      - task: run-tests
+        file: chart/ci/tasks/tests/task.yml
+        on_success:
+          put: chart-pull-request
+          params:
+            path: chart
+            context: tests
+            status: success
+        on_failure:
+          put: chart-pull-request
+          params:
+            path: chart
+            context: unit-tests
+            status: failure
+  ############################################
+
+groups:
+  - name: App
+    jobs:
+      - major-app
+      - minor-app
+      - patch-app
+      - app-rc
+      - app-testflight
+      - ship-app
+      - app-github-release
+      - update-app-dependencies
+      - updated-app-dependencies-testflight
+      - merge-updated-app-dependencies
+      - testflight-app-pr
+  - name: BOSH
+    jobs:
+      - major-bosh
+      - minor-bosh
+      - patch-bosh
+      - bosh-rc
+      - bosh-testflight
+      - ship-bosh
+      - bosh-github-release
+      - update-bosh-app
+      - testflight-bosh-pr
+  - name: Kubernetes
+    jobs:
+      - major-chart
+      - minor-chart
+      - patch-chart
+      - chart-rc
+      - chart-testflight
+      - ship-chart
+      - chart-github-release
+      - update-chart-app
+      - testflight-chart-pr
